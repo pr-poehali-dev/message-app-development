@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
+import AuthScreen from '@/components/AuthScreen';
 
 type Tab = 'chats' | 'contacts' | 'calls';
+
+interface User {
+  id: number;
+  phone: string;
+  name: string;
+  status: string;
+  online: boolean;
+}
 
 interface Chat {
   id: number;
@@ -53,10 +62,31 @@ const mockMessages: Message[] = [
 ];
 
 const Index = () => {
+  const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   const [selectedChat, setSelectedChat] = useState<Chat | null>(mockChats[0]);
   const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [newMessage, setNewMessage] = useState('');
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+  const handleLogin = (userData: User) => {
+    setUser(userData);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setUser(null);
+  };
+
+  if (!user) {
+    return <AuthScreen onLogin={handleLogin} />;
+  }
 
   const handleSendMessage = () => {
     if (newMessage.trim()) {
@@ -106,13 +136,20 @@ const Index = () => {
           </Button>
         </nav>
 
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-2">
+          <div className="relative group">
+            <Avatar className="w-12 h-12 cursor-pointer">
+              <AvatarFallback className="bg-primary text-primary-foreground">{user.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+          </div>
           <Button
             variant="ghost"
             size="icon"
             className="w-12 h-12 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            onClick={handleLogout}
+            title="Выйти"
           >
-            <Icon name="Settings" size={24} />
+            <Icon name="LogOut" size={24} />
           </Button>
         </div>
       </aside>

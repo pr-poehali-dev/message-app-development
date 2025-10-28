@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
 import AuthScreen from '@/components/AuthScreen';
+import AddContactDialog from '@/components/AddContactDialog';
+import CallScreen from '@/components/CallScreen';
 
 type Tab = 'chats' | 'contacts' | 'calls';
 
@@ -20,53 +22,42 @@ interface User {
 interface Chat {
   id: number;
   name: string;
-  lastMessage: string;
+  last_message: string;
   time: string;
-  unread?: number;
-  online?: boolean;
+  is_group?: boolean;
 }
 
 interface Contact {
   id: number;
+  phone: string;
   name: string;
   status: string;
-  online?: boolean;
+  online: boolean;
 }
 
 interface Message {
   id: number;
   text: string;
   time: string;
-  sender: 'me' | 'other';
+  sender_id: number;
+  sender_name?: string;
 }
 
-const mockChats: Chat[] = [
-  { id: 1, name: 'Команда дизайна', lastMessage: 'Посмотрите новые макеты', time: '14:32', unread: 3, online: true },
-  { id: 2, name: 'Алексей Иванов', lastMessage: 'Созвон завтра в 10?', time: '13:15', unread: 1, online: true },
-  { id: 3, name: 'Проект "Старт"', lastMessage: 'Обсудим бюджет', time: '11:40', online: false },
-  { id: 4, name: 'Мария Петрова', lastMessage: 'Отправила документы', time: 'Вчера', online: false },
-];
 
-const mockContacts: Contact[] = [
-  { id: 1, name: 'Алексей Иванов', status: 'Руководитель отдела', online: true },
-  { id: 2, name: 'Мария Петрова', status: 'Дизайнер', online: false },
-  { id: 3, name: 'Дмитрий Смирнов', status: 'Разработчик', online: true },
-  { id: 4, name: 'Елена Волкова', status: 'Маркетолог', online: true },
-];
-
-const mockMessages: Message[] = [
-  { id: 1, text: 'Привет! Как дела с проектом?', time: '14:28', sender: 'other' },
-  { id: 2, text: 'Всё отлично, завтра выкатываем', time: '14:29', sender: 'me' },
-  { id: 3, text: 'Отлично! Жду макеты', time: '14:30', sender: 'other' },
-  { id: 4, text: 'Посмотрите новые макеты', time: '14:32', sender: 'other' },
-];
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(mockChats[0]);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [isInCall, setIsInCall] = useState(false);
+  const [callContact, setCallContact] = useState<string | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -74,6 +65,115 @@ const Index = () => {
       setUser(JSON.parse(storedUser));
     }
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      if (activeTab === 'contacts') {
+        loadContacts();
+      } else if (activeTab === 'chats') {
+        loadChats();
+      }
+    }
+  }, [user, activeTab]);
+
+  useEffect(() => {
+    if (selectedChat) {
+      loadMessages(selectedChat.id);
+    }
+  }, [selectedChat]);
+
+  const loadContacts = async () => {
+    if (!user) return;
+
+    setLoadingContacts(true);
+    try {
+      const response = await fetch('https://functions.poehali.dev/ae0dcc8e-4b3f-465c-b5b8-d4c7aa3f99c7', {
+        headers: {
+          'X-User-Id': user.id.toString(),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setContacts(data);
+      }
+    } catch (err) {
+      console.error('Failed to load contacts', err);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  const loadChats = async () => {
+    if (!user) return;
+
+    setLoadingChats(true);
+    try {
+      const response = await fetch('https://functions.poehali.dev/9bdb98be-11ce-4edb-a1df-ccae98a3d0d8', {
+        headers: {
+          'X-User-Id': user.id.toString(),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setChats(data);
+      }
+    } catch (err) {
+      console.error('Failed to load chats', err);
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
+  const loadMessages = async (chatId: number) => {
+    if (!user) return;
+
+    setLoadingMessages(true);
+    try {
+      const response = await fetch(`https://functions.poehali.dev/9bdb98be-11ce-4edb-a1df-ccae98a3d0d8?action=messages&chat_id=${chatId}`, {
+        headers: {
+          'X-User-Id': user.id.toString(),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data);
+      }
+    } catch (err) {
+      console.error('Failed to load messages', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const startChat = async (contactId: number) => {
+    if (!user) return;
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/9bdb98be-11ce-4edb-a1df-ccae98a3d0d8', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': user.id.toString(),
+        },
+        body: JSON.stringify({ action: 'create', contact_id: contactId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setActiveTab('chats');
+        await loadChats();
+        const newChat = chats.find(c => c.id === data.chat_id);
+        if (newChat) {
+          setSelectedChat(newChat);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to create chat', err);
+    }
+  };
 
   const handleLogin = (userData: User) => {
     setUser(userData);
@@ -88,15 +188,33 @@ const Index = () => {
     return <AuthScreen onLogin={handleLogin} />;
   }
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      setMessages([...messages, {
-        id: messages.length + 1,
-        text: newMessage,
-        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-        sender: 'me'
-      }]);
-      setNewMessage('');
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChat || !user) return;
+
+    const messageText = newMessage;
+    setNewMessage('');
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/9bdb98be-11ce-4edb-a1df-ccae98a3d0d8', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': user.id.toString(),
+        },
+        body: JSON.stringify({ 
+          action: 'send', 
+          chat_id: selectedChat.id, 
+          text: messageText 
+        }),
+      });
+
+      if (response.ok) {
+        await loadMessages(selectedChat.id);
+        await loadChats();
+      }
+    } catch (err) {
+      console.error('Failed to send message', err);
+      setNewMessage(messageText);
     }
   };
 
@@ -156,11 +274,16 @@ const Index = () => {
 
       <div className="w-80 border-r border-border bg-card">
         <div className="p-4 border-b border-border">
-          <h2 className="text-xl font-semibold mb-3">
-            {activeTab === 'chats' && 'Чаты'}
-            {activeTab === 'contacts' && 'Контакты'}
-            {activeTab === 'calls' && 'Звонки'}
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl font-semibold">
+              {activeTab === 'chats' && 'Чаты'}
+              {activeTab === 'contacts' && 'Контакты'}
+              {activeTab === 'calls' && 'Звонки'}
+            </h2>
+            {activeTab === 'contacts' && user && (
+              <AddContactDialog userId={user.id} onContactAdded={loadContacts} />
+            )}
+          </div>
           <div className="relative">
             <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -171,7 +294,22 @@ const Index = () => {
         </div>
 
         <ScrollArea className="h-[calc(100vh-120px)]">
-          {activeTab === 'chats' && mockChats.map((chat) => (
+          {activeTab === 'chats' && loadingChats && (
+            <div className="p-8 text-center text-muted-foreground">
+              <Icon name="Loader2" size={48} className="mx-auto mb-3 opacity-50 animate-spin" />
+              <p>Загрузка чатов...</p>
+            </div>
+          )}
+
+          {activeTab === 'chats' && !loadingChats && chats.length === 0 && (
+            <div className="p-8 text-center text-muted-foreground">
+              <Icon name="MessageSquare" size={48} className="mx-auto mb-3 opacity-50" />
+              <p>Нет чатов</p>
+              <p className="text-sm mt-2">Начните общение с контактом</p>
+            </div>
+          )}
+
+          {activeTab === 'chats' && !loadingChats && chats.map((chat) => (
             <div
               key={chat.id}
               onClick={() => setSelectedChat(chat)}
@@ -188,21 +326,33 @@ const Index = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium truncate">{chat.name}</h3>
+                    <h3 className="font-medium truncate">{chat.name || 'Чат'}</h3>
                     <span className="text-xs text-muted-foreground">{chat.time}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
-                    {chat.unread && (
-                      <Badge className="ml-2 bg-primary text-primary-foreground">{chat.unread}</Badge>
-                    )}
+                    <p className="text-sm text-muted-foreground truncate">{chat.last_message || 'Нет сообщений'}</p>
                   </div>
                 </div>
               </div>
             </div>
           ))}
 
-          {activeTab === 'contacts' && mockContacts.map((contact) => (
+          {activeTab === 'contacts' && loadingContacts && (
+            <div className="p-8 text-center text-muted-foreground">
+              <Icon name="Loader2" size={48} className="mx-auto mb-3 opacity-50 animate-spin" />
+              <p>Загрузка контактов...</p>
+            </div>
+          )}
+
+          {activeTab === 'contacts' && !loadingContacts && contacts.length === 0 && (
+            <div className="p-8 text-center text-muted-foreground">
+              <Icon name="Users" size={48} className="mx-auto mb-3 opacity-50" />
+              <p>Нет контактов</p>
+              <p className="text-sm mt-2">Добавьте первый контакт</p>
+            </div>
+          )}
+
+          {activeTab === 'contacts' && !loadingContacts && contacts.map((contact) => (
             <div
               key={contact.id}
               className="p-4 border-b border-border cursor-pointer hover:bg-accent transition-colors"
@@ -221,10 +371,23 @@ const Index = () => {
                   <p className="text-sm text-muted-foreground">{contact.status}</p>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={() => startChat(contact.id)}
+                  >
                     <Icon name="MessageSquare" size={18} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setCallContact(contact.name);
+                      setIsInCall(true);
+                    }}
+                  >
                     <Icon name="Phone" size={18} />
                   </Button>
                 </div>
@@ -250,17 +413,29 @@ const Index = () => {
                   <AvatarFallback>{selectedChat.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-semibold">{selectedChat.name}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedChat.online ? 'В сети' : 'Не в сети'}
-                  </p>
+                  <h3 className="font-semibold">{selectedChat.name || 'Чат'}</h3>
+                  <p className="text-sm text-muted-foreground">В сети</p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" size="icon">
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => {
+                    setCallContact(selectedChat.name);
+                    setIsInCall(true);
+                  }}
+                >
                   <Icon name="Phone" size={20} />
                 </Button>
-                <Button variant="ghost" size="icon">
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => {
+                    setCallContact(selectedChat.name);
+                    setIsInCall(true);
+                  }}
+                >
                   <Icon name="Video" size={20} />
                 </Button>
                 <Button variant="ghost" size="icon">
@@ -270,27 +445,40 @@ const Index = () => {
             </div>
 
             <ScrollArea className="flex-1 p-6">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'me' ? 'justify-end' : 'justify-start'} animate-fade-in`}
-                  >
-                    <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        message.sender === 'me'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
-                      }`}
-                    >
-                      <p>{message.text}</p>
-                      <span className={`text-xs mt-1 block ${message.sender === 'me' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                        {message.time}
-                      </span>
+              {loadingMessages ? (
+                <div className="flex items-center justify-center h-full">
+                  <Icon name="Loader2" size={32} className="animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.length === 0 ? (
+                    <div className="text-center text-muted-foreground mt-8">
+                      <p>Нет сообщений</p>
+                      <p className="text-sm mt-2">Начните общение</p>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.sender_id === user.id ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                      >
+                        <div
+                          className={`max-w-[70%] rounded-lg p-3 ${
+                            message.sender_id === user.id
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                          }`}
+                        >
+                          <p>{message.text}</p>
+                          <span className={`text-xs mt-1 block ${message.sender_id === user.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                            {message.time}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </ScrollArea>
 
             <div className="p-4 border-t border-border bg-card">
@@ -320,6 +508,16 @@ const Index = () => {
           </div>
         )}
       </div>
+
+      {isInCall && callContact && (
+        <CallScreen 
+          contactName={callContact} 
+          onEndCall={() => {
+            setIsInCall(false);
+            setCallContact(null);
+          }} 
+        />
+      )}
     </div>
   );
 };

@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "name": "Search user by phone",
+      "method": "GET",
+      "path": "/?action=search&phone=%2B79999999999",
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get contacts list",
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "X-User-Id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get user chats",
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "X-User-Id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send message requires auth",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "send",
+        "chat_id": 1,
+        "text": "Hello"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
